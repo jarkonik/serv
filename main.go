@@ -44,23 +44,31 @@ func (c *Connection) Incoming(buffer []byte) {
 
 		posBroadcast := messages.PositionBroadcastMsg{}
 		posBroadcast.Type = messages.PositionBroadcast
-		posBroadcast.UpdateLocationMsg = upmsg
-		broadcast(c.pc, posBroadcast)
+		posBroadcast.Position = upmsg.Position
+		posBroadcast.Rotation = upmsg.Rotation
+		posBroadcast.UUID = c.uuid
+		broadcast(c.pc, posBroadcast, c.addr.String())
 	default:
 		panic("Unkown msg type")
 	}
 }
 
 func sendResponse(conn net.PacketConn, addr net.Addr, msg interface{}) {
-	_, err := conn.WriteTo([]byte("From server: Hello I got your mesage "), addr)
+	var buffer bytes.Buffer
+	err := binary.Write(&buffer, binary.LittleEndian, msg)
 	if err != nil {
-		panic("Couldnt send response")
+		panic(err)
 	}
+
+	conn.WriteTo(buffer.Bytes(), addr)
+
 }
 
-func broadcast(conn net.PacketConn, msg interface{}) {
-	for _, con := range connections {
-		sendResponse(conn, con.addr, msg)
+func broadcast(conn net.PacketConn, msg interface{}, initiatorAddr string) {
+	for addrString, con := range connections {
+		if addrString != initiatorAddr {
+			sendResponse(conn, con.addr, msg)
+		}
 	}
 }
 
