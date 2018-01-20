@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"github.com/satori/go.uuid"
+
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -10,12 +12,7 @@ import (
 	"serv/messages"
 )
 
-var connections map[net.Addr]*Connection
-
-const (
-	Handshake = iota
-	UpdatePosition
-)
+var connections map[string]*Connection
 
 type Parser interface {
 	Parse([]byte) error
@@ -23,9 +20,8 @@ type Parser interface {
 
 type Connection struct {
 	addr net.Addr
-	X    uint8
-	Y    uint8
-	Z    uint8
+	pc   net.PacketConn
+	uuid uuid.UUID
 }
 
 func (c *Connection) Incoming(buffer []byte) {
@@ -39,33 +35,53 @@ func (c *Connection) Incoming(buffer []byte) {
 	rdr.Seek(0, 0)
 
 	switch msg.Type {
-	case UpdatePosition:
+	case messages.UpdatePosition:
 		upmsg := messages.UpdateLocationMsg{}
 		err := binary.Read(rdr, binary.LittleEndian, &upmsg)
 		if err != nil {
 			panic(err)
 		}
-		c.X = upmsg.X
-		c.Y = upmsg.Y
-		c.Z = upmsg.Z
-		fmt.Println(c)
+
+		posBroadcast := messages.PositionBroadcastMsg{}
+		posBroadcast.Type = messages.PositionBroadcast
+		posBroadcast.UpdateLocationMsg = upmsg
+		broadcast(c.pc, posBroadcast)
 	default:
 		panic("Unkown msg type")
 	}
 }
 
-func findOrCreateConnection(addr net.Addr) *Connection {
-	con := connections[addr]
+func sendResponse(conn net.PacketConn, addr net.Addr, msg interface{}) {
+	_, err := conn.WriteTo([]byte("From server: Hello I got your mesage "), addr)
+	if err != nil {
+		panic("Couldnt send response")
+	}
+}
+
+func broadcast(conn net.PacketConn, msg interface{}) {
+	for _, con := range connections {
+		sendResponse(conn, con.addr, msg)
+	}
+}
+
+func findOrCreateConnection(addr net.Addr, pc net.PacketConn) *Connection {
+	addrString := addr.String()
+
+	con := connections[addrString]
 	if con != nil {
 		return con
 	}
 
-	con = &Connection{addr: addr}
+	uuid := uuid.Must(uuid.NewV4())
+	con = &Connection{addr: addr, pc: pc, uuid: uuid}
+	connections[addrString] = con
+	fmt.Printf("New connection: %s\n", uuid)
+
 	return con
 }
 
 func main() {
-	connections = make(map[net.Addr]*Connection)
+	connections = make(map[string]*Connection)
 
 	port := os.Getenv("PORT")
 	if len(port) == 0 {
@@ -86,7 +102,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		con := findOrCreateConnection(addr)
+		con := findOrCreateConnection(addr, pc)
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
