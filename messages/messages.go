@@ -8,6 +8,7 @@ import (
 const (
 	UpdatePosition = iota
 	PositionBroadcast
+	MonsterMoveBroadcast
 )
 
 type Message struct {
@@ -18,6 +19,12 @@ type UpdateLocationMsg struct {
 	Message
 	Position mgl32.Vec3
 	Rotation mgl32.Quat
+}
+
+type MonsterMoveBroadcastMsg struct {
+	Message
+	Position mgl32.Vec3
+	UUID     uuid.UUID
 }
 
 type PositionBroadcastMsg struct {
