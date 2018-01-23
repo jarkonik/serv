@@ -36,14 +36,23 @@ func (m *Monster) nearestPlayer() *Connection {
 func (m *Monster) Move() {
 	dest := m.nearestPlayer()
 	if dest != nil {
-		dir := dest.Position.Sub(m.Position).Normalize().Mul(0.2)
+		vec := dest.Position.Sub(m.Position)
+		dir := vec.Normalize().Mul(0.2)
 		m.Position = m.Position.Add(dir)
 
-		msg := messages.MonsterMoveBroadcastMsg{}
-		msg.Type = messages.MonsterMoveBroadcast
-		msg.Position = m.Position
-		msg.UUID = m.UUID
-		broadcast(msg, "")
+		if vec.Len() < 0.5 {
+			msg := messages.DieBroadcastMsg{}
+			msg.Type = messages.DieBroadcast
+			msg.UUID = dest.uuid
+			broadcast(msg, "")
+			delete(connections, dest.addr.String())
+		} else {
+			msg := messages.MonsterMoveBroadcastMsg{}
+			msg.Type = messages.MonsterMoveBroadcast
+			msg.Position = m.Position
+			msg.UUID = m.UUID
+			broadcast(msg, "")
+		}
 	}
 }
 
@@ -135,6 +144,7 @@ func findOrCreateConnection(addr net.Addr, pc net.PacketConn) *Connection {
 
 func spawner() {
 	for {
+		time.Sleep(time.Millisecond * 75)
 		if len(monsters) == 0 {
 			level++
 			monsterNumber := level * level
@@ -149,7 +159,7 @@ func spawner() {
 
 func mover() {
 	for {
-		time.Sleep(time.Millisecond * 75)
+		time.Sleep(time.Millisecond * 150)
 		for _, monster := range monsters {
 			monster.Move()
 		}

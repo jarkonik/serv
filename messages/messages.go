@@ -9,6 +9,7 @@ const (
 	UpdatePosition = iota
 	PositionBroadcast
 	MonsterMoveBroadcast
+	DieBroadcast
 )
 
 type Message struct {
@@ -25,6 +26,11 @@ type MonsterMoveBroadcastMsg struct {
 	Message
 	Position mgl32.Vec3
 	UUID     uuid.UUID
+}
+
+type DieBroadcastMsg struct {
+	Message
+	UUID uuid.UUID
 }
 
 type PositionBroadcastMsg struct {
